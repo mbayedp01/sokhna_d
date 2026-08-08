@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { invitationSchema, type ActionState } from "@/lib/schema";
-import { ACTIVITIES, PLACES } from "@/lib/content";
+import { PLACES } from "@/lib/content";
 import { formatDateFr } from "@/lib/utils";
 
 /** Échappe le HTML pour éviter toute injection dans l'email. */
@@ -42,8 +42,10 @@ export async function submitInvitation(raw: unknown): Promise<ActionState> {
     timeZone: "Europe/Paris",
   }).format(new Date());
 
-  const placeName = PLACES.find((p) => p.id === data.place)?.name ?? data.place;
-  const activityName = ACTIVITIES.find((a) => a.id === data.activity)?.label ?? data.activity;
+  const placeName =
+    data.place === "son-choix"
+      ? data.customPlace?.trim() || "Restaurant au choix de Sokhna"
+      : PLACES.find((p) => p.id === data.place)?.name ?? data.place;
 
   const apiKey = process.env.RESEND_API_KEY;
   const to = process.env.RESEND_TO;
@@ -65,7 +67,6 @@ export async function submitInvitation(raw: unknown): Promise<ActionState> {
       <table role="presentation" style="width:100%;border-collapse:collapse;">
         ${row("Nom", "Sokhna")}
         ${row("Lieu", placeName)}
-        ${row("Activité", activityName)}
         ${row("Date", formatDateFr(data.date))}
         ${row("Heure", data.time)}
         ${row("Message", data.message?.trim() || "—")}
@@ -90,7 +91,6 @@ export async function submitInvitation(raw: unknown): Promise<ActionState> {
       text: [
         "Nom : Sokhna",
         `Lieu : ${placeName}`,
-        `Activité : ${activityName}`,
         `Date : ${formatDateFr(data.date)}`,
         `Heure : ${data.time}`,
         `Message : ${data.message?.trim() || "—"}`,

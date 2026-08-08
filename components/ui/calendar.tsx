@@ -1,125 +1,134 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
 const MONTHS = [
-  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
-  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
 ];
 
-function pad(n: number) { return String(n).padStart(2, "0"); }
+const toISO = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-export function StarCalendar({
+const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+/**
+ * Calendrier maison, animé, entièrement navigable au clavier.
+ * Les dates passées sont désactivées.
+ */
+export function Calendar({
   value,
   onChange,
+  className,
 }: {
   value?: string;
   onChange: (iso: string) => void;
+  className?: string;
 }) {
-  const today = new Date();
-  const [month, setMonth] = React.useState(today.getMonth());
-  const [year, setYear] = React.useState(today.getFullYear());
-  const [dir, setDir] = React.useState(1);
+  const reduced = useReducedMotion();
+  const today = React.useMemo(() => startOfDay(new Date()), []);
+  const [cursor, setCursor] = React.useState(() => {
+    const base = value ? new Date(`${value}T12:00:00`) : today;
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+  const [direction, setDirection] = React.useState(1);
 
-  const firstDay = new Date(year, month, 1);
-  const startDow = (firstDay.getDay() + 6) % 7;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const prev = () => {
-    setDir(-1);
-    if (month === 0) { setMonth(11); setYear(year - 1); }
-    else setMonth(month - 1);
-  };
-  const next = () => {
-    setDir(1);
-    if (month === 11) { setMonth(0); setYear(year + 1); }
-    else setMonth(month + 1);
+  const move = (delta: number) => {
+    setDirection(delta);
+    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
   };
 
-  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  // Grille : décalage lundi-first + jours du mois.
+  const firstWeekday = (cursor.getDay() + 6) % 7;
+  const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
+  const cells: (Date | null)[] = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(cursor.getFullYear(), cursor.getMonth(), i + 1)),
+  ];
+
+  const monthLabel = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
 
   return (
-    <div className="w-full max-w-sm mx-auto">
-      <div className="flex items-center justify-between mb-5">
+    <div className={cn("glass w-full rounded-3xl p-5 sm:p-7", className)}>
+      <div className="mb-5 flex items-center justify-between">
         <button
           type="button"
-          onClick={prev}
-          className="p-2 rounded-full hover:bg-white/5 text-primary/60 hover:text-primary transition-colors"
+          onClick={() => move(-1)}
           aria-label="Mois précédent"
+          className="grid h-11 w-11 place-items-center rounded-full border border-sage-200 bg-white/70 text-sage-700 transition hover:bg-sage-50"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-5 w-5" aria-hidden />
         </button>
-        <span className="font-display text-lg text-primary">{MONTHS[month]} {year}</span>
+
+        <div className="relative h-7 overflow-hidden px-4" aria-live="polite">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={monthLabel}
+              className="block font-display text-lg capitalize text-sage-700"
+              initial={reduced ? false : { y: direction * 22, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={reduced ? undefined : { y: direction * -22, opacity: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {monthLabel}
+            </motion.span>
+          </AnimatePresence>
+        </div>
+
         <button
           type="button"
-          onClick={next}
-          className="p-2 rounded-full hover:bg-white/5 text-primary/60 hover:text-primary transition-colors"
+          onClick={() => move(1)}
           aria-label="Mois suivant"
+          className="grid h-11 w-11 place-items-center rounded-full border border-sage-200 bg-white/70 text-sage-700 transition hover:bg-sage-50"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-5 w-5" aria-hidden />
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-2">
-        {DAYS.map((d) => (
-          <div key={d} className="text-center text-xs text-dim/60 py-1">{d}</div>
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-xs font-medium tracking-widest text-ink-soft/70">
+        {WEEKDAYS.map((d, i) => (
+          <span key={i}>{d}</span>
         ))}
       </div>
 
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div
-          key={`${year}-${month}`}
-          initial={{ opacity: 0, x: dir * 30 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -dir * 30 }}
-          transition={{ duration: 0.25 }}
-          className="grid grid-cols-7 gap-1"
-        >
-          {Array.from({ length: startDow }).map((_, i) => (
-            <div key={`e-${i}`} />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const iso = `${year}-${pad(month + 1)}-${pad(day)}`;
-            const isPast = iso < todayStr;
-            const isSelected = value === iso;
-            const isToday = iso === todayStr;
-
-            return (
-              <button
-                key={day}
-                type="button"
-                disabled={isPast}
-                onClick={() => onChange(iso)}
-                aria-label={`${day} ${MONTHS[month]} ${year}`}
-                aria-pressed={isSelected}
-                className={cn(
-                  "relative aspect-square flex items-center justify-center rounded-full text-sm transition-all duration-300",
-                  isPast && "opacity-20 cursor-not-allowed",
-                  !isPast && !isSelected && "hover:bg-accent/15 text-primary/80 hover:text-primary",
-                  isSelected && "bg-accent/30 text-white shadow-[0_0_20px_rgba(175,198,255,0.3)] border border-accent/40",
-                )}
-              >
-                {day}
-                {isToday && !isSelected && (
-                  <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 h-1 w-1 rounded-full bg-accent" />
-                )}
-                {isSelected && (
-                  <motion.span
-                    layoutId="star-selected"
-                    className="absolute inset-0 rounded-full bg-accent/10 -z-10"
-                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </motion.div>
-      </AnimatePresence>
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+        {cells.map((date, i) => {
+          if (!date) return <span key={`e-${i}`} />;
+          const iso = toISO(date);
+          const disabled = date < today;
+          const selected = value === iso;
+          return (
+            <motion.button
+              key={iso}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(iso)}
+              aria-label={date.toLocaleDateString("fr-FR", { dateStyle: "full" })}
+              aria-pressed={selected}
+              initial={reduced ? false : { opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, delay: reduced ? 0 : i * 0.008 }}
+              whileHover={disabled || reduced ? undefined : { scale: 1.12 }}
+              whileTap={disabled || reduced ? undefined : { scale: 0.92 }}
+              className={cn(
+                "relative aspect-square rounded-xl text-sm font-medium transition-colors duration-200",
+                disabled && "cursor-not-allowed text-ink-soft/25",
+                !disabled && !selected && "text-ink hover:bg-sage-100",
+                selected && "bg-sage-600 text-cream shadow-[0_8px_20px_-8px_rgba(65,79,60,0.8)]",
+              )}
+            >
+              {date.getDate()}
+              {toISO(today) === iso && !selected && (
+                <span aria-hidden className="absolute bottom-1.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-gold" />
+              )}
+            </motion.button>
+          );
+        })}
+      </div>
     </div>
   );
 }

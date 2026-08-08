@@ -8,60 +8,54 @@ export type Place = {
   name: string;
   description: string;
   ambiance: string;
-  /** Dégradé décoratif utilisé comme visuel (aucune image externe = zéro latence). */
   gradient: string;
   emoji: string;
+  /** Si vrai, un champ texte permet de préciser le lieu souhaité. */
+  custom?: boolean;
 };
 
 export const PLACES: Place[] = [
   {
-    id: "chic",
-    name: "Restaurant chic",
-    description: "Une table soignée, une cuisine précise, un service discret.",
-    ambiance: "Feutré · Élégant",
+    id: "maison-italie",
+    name: "Maison d'Italie — Ngor",
+    description: "On traverse jusqu'à la deuxième plage pour y accéder. Un cadre unique, les pieds presque dans le sable.",
+    ambiance: "Bord de mer · Authentique",
+    gradient: "linear-gradient(150deg,#4a7c9b 0%,#7db4c9 45%,#e8dcc6 100%)",
+    emoji: "🍝",
+  },
+  {
+    id: "club-union",
+    name: "Club L'Union",
+    description: "Un restaurant avec du caractère, une ambiance chaleureuse et une belle carte.",
+    ambiance: "Convivial · Raffiné",
     gradient: "linear-gradient(150deg,#6b8161 0%,#a3b795 45%,#e8dcc6 100%)",
     emoji: "🍽️",
   },
   {
-    id: "salon-de-the",
-    name: "Salon de thé",
-    description: "Théières fumantes, pâtisseries fines et conversations sans hâte.",
-    ambiance: "Doux · Chaleureux",
-    gradient: "linear-gradient(150deg,#d6c4a3 0%,#e8dcc6 45%,#faf8f3 100%)",
-    emoji: "🫖",
+    id: "kpopstore",
+    name: "KpopStore Dakar",
+    description: "Albums K-pop, nouilles Buldak et bonne ambiance — pour changer un peu.",
+    ambiance: "Original · Décontracté",
+    gradient: "linear-gradient(150deg,#a377b0 0%,#c9a3d6 45%,#eef2ec 100%)",
+    emoji: "🍜",
   },
   {
-    id: "cafe-calme",
-    name: "Café calme",
-    description: "Un endroit tranquille où l'on s'entend parler.",
-    ambiance: "Paisible · Simple",
-    gradient: "linear-gradient(150deg,#869c77 0%,#c2d0b9 50%,#f2ede2 100%)",
-    emoji: "☕️",
+    id: "kayak",
+    name: "Kayak — Anse Bernard",
+    description: "Pagayer, respirer l'air marin, profiter du paysage. Une activité tranquille, sans pression.",
+    ambiance: "Plein air · Paisible",
+    gradient: "linear-gradient(150deg,#3f7c8a 0%,#7fb8c4 45%,#eef2ec 100%)",
+    emoji: "🛶",
   },
   {
-    id: "vue",
-    name: "Restaurant avec vue",
-    description: "De grandes baies, la ville en contrebas, la lumière qui baisse.",
-    ambiance: "Panoramique · Lumineux",
+    id: "son-choix",
+    name: "Un restaurant de ton choix",
+    description: "Tu connais peut-être un endroit que tu apprécies particulièrement. Précise-le ci-dessous.",
+    ambiance: "Surprise · À toi de jouer",
     gradient: "linear-gradient(150deg,#b99a5c 0%,#d9c08a 40%,#eef2ec 100%)",
-    emoji: "🌇",
+    emoji: "✨",
+    custom: true,
   },
-];
-
-export type Activity = {
-  id: string;
-  label: string;
-  detail: string;
-  icon: "Trees" | "CupSoda" | "Landmark" | "BookOpen" | "Frame" | "Footprints";
-};
-
-export const ACTIVITIES: Activity[] = [
-  { id: "parc", label: "Marcher dans un parc", detail: "De l'air, des arbres, du temps.", icon: "Trees" },
-  { id: "the", label: "Salon de thé", detail: "Une pause posée, à l'abri du bruit.", icon: "CupSoda" },
-  { id: "musee", label: "Musée", detail: "Regarder, commenter, apprendre.", icon: "Landmark" },
-  { id: "librairie", label: "Librairie", detail: "Flâner entre les rayons.", icon: "BookOpen" },
-  { id: "expo", label: "Exposition", detail: "Une découverte à partager.", icon: "Frame" },
-  { id: "balade", label: "Balade tranquille", detail: "Marcher, discuter, respirer.", icon: "Footprints" },
 ];
 
 export const TIME_SLOTS = [

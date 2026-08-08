@@ -20,28 +20,35 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Une invitation — pour Sokhna", template: "%s | Une invitation" },
-  description: "Une invitation élégante et respectueuse : un voyage parmi les étoiles pour partager un bon moment.",
+  title: {
+    default: "Une invitation — pour Sokhna",
+    template: "%s | Une invitation",
+  },
+  description:
+    "Une invitation élégante et respectueuse : choisir un lieu, une activité, une date, et se retrouver autour d'un bon moment.",
+  applicationName: "Une invitation",
+  keywords: ["invitation", "rencontre", "élégant", "respectueux"],
+  authors: [{ name: "Une invitation" }],
   openGraph: {
     type: "website",
     locale: "fr_FR",
     url: siteUrl,
     siteName: "Une invitation",
     title: "Une invitation — pour Sokhna",
-    description: "Un voyage parmi les étoiles pour partager un bon moment.",
+    description: "Une proposition simple et élégante : un moment agréable, à ton rythme.",
   },
   twitter: {
     card: "summary_large_image",
     title: "Une invitation — pour Sokhna",
-    description: "Un voyage parmi les étoiles pour partager un bon moment.",
+    description: "Une proposition simple et élégante : un moment agréable, à ton rythme.",
   },
   robots: { index: false, follow: false },
   manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#05070D",
-  colorScheme: "dark",
+  themeColor: "#faf8f3",
+  colorScheme: "light",
   width: "device-width",
   initialScale: 1,
 };

@@ -1,303 +1,326 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Trees, CupSoda, Landmark, BookOpen, Frame, Footprints,
-  MapPin, Sparkles, Calendar, Clock, MessageCircle, Send,
-} from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Check, Clock, Loader2 } from "lucide-react";
+
+import { PLACES, TIME_SLOTS } from "@/lib/content";
 import { invitationSchema, type InvitationInput } from "@/lib/schema";
-import { PLACES, ACTIVITIES, TIME_SLOTS, type Place, type Activity } from "@/lib/content";
+import { formatDateFr, cn } from "@/lib/utils";
 import { submitInvitation } from "@/app/actions";
-import { StarCalendar } from "@/components/ui/calendar";
+
+import { SectionHeading } from "@/components/sections/section-heading";
+import { TiltCard } from "@/components/ui/tilt-card";
+import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { FancyButton } from "@/components/ui/fancy-button";
 import { Reveal } from "@/components/effects/reveal";
-import { cn, formatDateFr } from "@/lib/utils";
+import { burstPetals } from "@/components/effects/petal-canvas";
 
-const ICONS: Record<Activity["icon"], React.ComponentType<{ className?: string }>> = {
-  Trees, CupSoda, Landmark, BookOpen, Frame, Footprints,
-};
-
-function SectionBadge({ icon: Icon, label }: { icon: React.ComponentType<{ className?: string }>; label: string }) {
-  return (
-    <motion.span
-      className="mb-6 inline-flex items-center gap-2 rounded-full glass px-5 py-2 text-xs tracking-[0.25em] text-accent uppercase"
-      initial={{ opacity: 0, y: 14 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.8 }}
-    >
-      <Icon className="h-3.5 w-3.5" aria-hidden />
-      {label}
-    </motion.span>
-  );
-}
-
-function PlaceCard({
-  place,
-  selected,
-  onSelect,
-}: {
-  place: Place;
-  selected: boolean;
-  onSelect: () => void;
-}) {
+/**
+ * Bloc principal : choix du lieu, de l'activité, de la date, de l'heure,
+ * message optionnel puis confirmation (Server Action + Resend).
+ */
+export function Planner({ onConfirmed }: { onConfirmed: () => void }) {
   const reduced = useReducedMotion();
+  const [pending, startTransition] = React.useTransition();
+  const [serverError, setServerError] = React.useState<string | null>(null);
 
-  return (
-    <motion.button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={cn(
-        "group relative flex flex-col items-center gap-3 rounded-3xl glass p-6 text-center transition-all duration-300",
-        selected && "border-accent/50 shadow-[0_0_30px_rgba(175,198,255,0.15)] bg-accent/10",
-        !selected && "hover:bg-white/5 hover:border-white/20"
-      )}
-      whileHover={reduced ? undefined : { scale: 1.03, y: -4 }}
-      whileTap={reduced ? undefined : { scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-    >
-      <span className="text-4xl">{place.emoji}</span>
-      <span className="font-display text-lg text-primary">{place.name}</span>
-      <span className="text-sm text-dim/70 leading-relaxed">{place.description}</span>
-      <span className="text-xs text-accent/70 tracking-wider">{place.ambiance}</span>
-      {selected && (
-        <motion.span
-          layoutId="place-glow"
-          className="absolute inset-0 rounded-3xl border border-accent/30 -z-10"
-          transition={{ type: "spring", stiffness: 200, damping: 20 }}
-        />
-      )}
-    </motion.button>
-  );
-}
-
-function ActivityButton({
-  activity,
-  selected,
-  onSelect,
-}: {
-  activity: Activity;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const Icon = ICONS[activity.icon];
-  return (
-    <motion.button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={cn(
-        "flex flex-col items-center gap-2 rounded-2xl glass p-5 text-center transition-all duration-300",
-        selected && "border-accent/50 bg-accent/10 shadow-[0_0_20px_rgba(175,198,255,0.12)]",
-        !selected && "hover:bg-white/5"
-      )}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.97 }}
-    >
-      <Icon className={cn("h-6 w-6 transition-colors", selected ? "text-accent" : "text-primary/60")} />
-      <span className="text-sm font-medium text-primary">{activity.label}</span>
-      <span className="text-xs text-dim/60">{activity.detail}</span>
-    </motion.button>
-  );
-}
-
-export function Planner({ onDone }: { onDone: () => void }) {
   const {
+    handleSubmit,
     setValue,
     watch,
-    handleSubmit,
     register,
     formState: { errors },
   } = useForm<InvitationInput>({
     resolver: zodResolver(invitationSchema),
-    defaultValues: { place: "", activity: "", date: "", time: "", message: "" },
+    defaultValues: { place: "", customPlace: "", date: "", time: "", message: "" },
+    mode: "onSubmit",
   });
 
-  const [isPending, startTransition] = React.useTransition();
-  const [error, setError] = React.useState("");
   const place = watch("place");
-  const activity = watch("activity");
   const date = watch("date");
   const time = watch("time");
 
-  const onSubmit = (data: InvitationInput) => {
+  const onSubmit = (values: InvitationInput, e?: React.BaseSyntheticEvent) => {
+    setServerError(null);
+    const native = e?.nativeEvent as PointerEvent | undefined;
     startTransition(async () => {
-      const res = await submitInvitation(data);
-      if (res.ok) onDone();
-      else setError(res.error ?? "Une erreur est survenue.");
+      const res = await submitInvitation(values);
+      if (res.ok) {
+        burstPetals(native?.clientX ?? window.innerWidth / 2, native?.clientY ?? window.innerHeight / 2, 60);
+        onConfirmed();
+      } else {
+        setServerError(res.error ?? "Une erreur est survenue.");
+      }
     });
   };
 
+  /** Sélection d'une option + petite explosion de pétales au point cliqué. */
+  const select = (field: "place" | "time", value: string) => (e?: React.MouseEvent) => {
+    setValue(field, value, { shouldValidate: true });
+    if (e) burstPetals(e.clientX, e.clientY, 14);
+  };
+
   return (
-    <form
-      onSubmit={handleSubmit(onSubmit)}
-      className="relative z-10 mx-auto max-w-5xl space-y-28 px-6 py-32"
-    >
-      {/* Places */}
-      <section aria-labelledby="place-title">
-        <div className="text-center">
-          <SectionBadge icon={MapPin} label="Le lieu" />
-          <Reveal>
-            <h2 id="place-title" className="font-display text-3xl text-primary sm:text-5xl text-glow">
-              Où aimerais-tu aller ?
-            </h2>
-          </Reveal>
-        </div>
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="w-full">
+      {/* ------------------------- Lieux ------------------------- */}
+      <section id="lieux" className="px-6 py-24 sm:py-32" aria-labelledby="lieux-title">
+        <SectionHeading
+          id="lieux-title"
+          step="Étape 1"
+          title="Où aimerais-tu aller ?"
+          subtitle="Restaurants ou activité, toutes les ambiances sont calmes et agréables. À toi de choisir."
+        />
+
+        <div className="mx-auto grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {PLACES.map((p, i) => (
-            <Reveal key={p.id} delay={i * 0.08}>
-              <PlaceCard place={p} selected={place === p.id} onSelect={() => setValue("place", p.id)} />
-            </Reveal>
-          ))}
-        </div>
-        {errors.place && <p className="mt-4 text-center text-sm text-red-400">{errors.place.message}</p>}
-      </section>
-
-      {/* Activities */}
-      <section aria-labelledby="activity-title">
-        <div className="text-center">
-          <SectionBadge icon={Sparkles} label="L'activité" />
-          <Reveal>
-            <h2 id="activity-title" className="font-display text-3xl text-primary sm:text-5xl text-glow">
-              Quelle activité te ferait plaisir ?
-            </h2>
-          </Reveal>
-        </div>
-        <div className="mt-12 grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-          {ACTIVITIES.map((a, i) => (
-            <Reveal key={a.id} delay={i * 0.06}>
-              <ActivityButton activity={a} selected={activity === a.id} onSelect={() => setValue("activity", a.id)} />
-            </Reveal>
-          ))}
-        </div>
-        {errors.activity && <p className="mt-4 text-center text-sm text-red-400">{errors.activity.message}</p>}
-      </section>
-
-      {/* Date & Time */}
-      <section aria-labelledby="date-title">
-        <div className="text-center">
-          <SectionBadge icon={Calendar} label="Le moment" />
-          <Reveal>
-            <h2 id="date-title" className="font-display text-3xl text-primary sm:text-5xl text-glow">
-              Quel jour te conviendrait ?
-            </h2>
-          </Reveal>
-        </div>
-        <div className="mt-12 grid gap-12 lg:grid-cols-2">
-          <Reveal>
-            <div className="glass rounded-3xl p-6">
-              <StarCalendar value={date} onChange={(v) => setValue("date", v)} />
-            </div>
-          </Reveal>
-          <Reveal delay={0.1}>
-            <div>
-              <h3 className="mb-4 flex items-center gap-2 text-sm tracking-[0.2em] text-accent uppercase">
-                <Clock className="h-4 w-4" aria-hidden /> Horaire
-              </h3>
-              <div className="grid grid-cols-4 gap-3">
-                {TIME_SLOTS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setValue("time", t)}
-                    aria-pressed={time === t}
-                    className={cn(
-                      "rounded-xl glass py-3 text-sm transition-all duration-300",
-                      time === t
-                        ? "border-accent/50 bg-accent/15 text-white shadow-[0_0_15px_rgba(175,198,255,0.15)]"
-                        : "text-primary/60 hover:text-primary hover:bg-white/5"
-                    )}
+            <Reveal key={p.id} delay={i * 0.09}>
+              <TiltCard
+                selected={place === p.id}
+                onClick={() => setValue("place", p.id, { shouldValidate: true })}
+                ariaLabel={`Choisir : ${p.name}. ${p.description}`}
+                className="h-full"
+              >
+                <div className="flex h-full flex-col">
+                  <div
+                    className="relative h-40 w-full overflow-hidden"
+                    style={{ background: p.gradient }}
+                    aria-hidden
                   >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </Reveal>
+                    <span className="absolute inset-0 grid place-items-center text-5xl drop-shadow-sm">
+                      {p.emoji}
+                    </span>
+                    <span className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-white/70 to-transparent" />
+                  </div>
+                  <div className="flex flex-1 flex-col p-6">
+                    <span className="text-[10px] tracking-[0.28em] text-gold uppercase">{p.ambiance}</span>
+                    <h3 className="mt-2 flex-1 font-display text-xl text-sage-700">{p.name}</h3>
+                    <span
+                      className={cn(
+                        "mt-5 inline-flex items-center gap-2 text-sm font-medium transition-colors",
+                        place === p.id ? "text-sage-600" : "text-ink-soft/60",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "grid h-5 w-5 place-items-center rounded-full border transition-all",
+                          place === p.id ? "border-sage-600 bg-sage-600" : "border-sage-300",
+                        )}
+                      >
+                        {place === p.id && <Check className="h-3 w-3 text-cream" aria-hidden />}
+                      </span>
+                      {place === p.id ? "Choisie" : "Choisir"}
+                    </span>
+                  </div>
+                </div>
+              </TiltCard>
+            </Reveal>
+          ))}
         </div>
-        {(errors.date || errors.time) && (
-          <p className="mt-4 text-center text-sm text-red-400">
-            {errors.date?.message || errors.time?.message}
-          </p>
-        )}
-      </section>
+        <FieldError message={errors.place?.message} />
 
-      {/* Message & Submit */}
-      <section aria-labelledby="msg-title">
-        <div className="text-center">
-          <SectionBadge icon={MessageCircle} label="Un mot ?" />
-          <Reveal>
-            <h2 id="msg-title" className="font-display text-3xl text-primary sm:text-5xl text-glow">
-              Un petit message ? (optionnel)
-            </h2>
-          </Reveal>
-        </div>
-        <Reveal>
-          <div className="mx-auto mt-10 max-w-lg">
-            <Textarea
-              {...register("message")}
-              rows={4}
-              maxLength={600}
-              placeholder="Si tu veux ajouter quelque chose…"
-            />
-          </div>
-        </Reveal>
-
-        {/* Summary */}
+        {/* Champ libre : uniquement si « Un restaurant de ton choix » est sélectionné */}
         <AnimatePresence>
-          {(place || activity || date || time) && (
+          {place === "son-choix" && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mx-auto mt-12 max-w-md glass rounded-3xl p-6"
+              className="mx-auto mt-6 max-w-md"
+              initial={{ opacity: 0, y: -10, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -10, height: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
-              <h3 className="mb-4 text-center text-sm tracking-[0.2em] text-accent uppercase">Récapitulatif</h3>
-              <dl className="space-y-2 text-sm">
-                {place && (
-                  <div className="flex justify-between">
-                    <dt className="text-dim/60">Lieu</dt>
-                    <dd className="text-primary">{PLACES.find((p) => p.id === place)?.name}</dd>
-                  </div>
+              <label htmlFor="customPlace" className="mb-2 block text-sm font-medium text-sage-700">
+                Quel restaurant as-tu en tête ?
+              </label>
+              <input
+                id="customPlace"
+                type="text"
+                placeholder="Le nom du restaurant"
+                className={cn(
+                  "w-full rounded-2xl border border-sage-200 bg-white/70 px-5 py-3 text-base text-ink",
+                  "placeholder:text-ink-soft/60 shadow-inner outline-none backdrop-blur-sm",
+                  "transition-all duration-300 focus:border-sage-400 focus:bg-white",
                 )}
-                {activity && (
-                  <div className="flex justify-between">
-                    <dt className="text-dim/60">Activité</dt>
-                    <dd className="text-primary">{ACTIVITIES.find((a) => a.id === activity)?.label}</dd>
-                  </div>
-                )}
-                {date && (
-                  <div className="flex justify-between">
-                    <dt className="text-dim/60">Date</dt>
-                    <dd className="text-primary">{formatDateFr(date)}</dd>
-                  </div>
-                )}
-                {time && (
-                  <div className="flex justify-between">
-                    <dt className="text-dim/60">Heure</dt>
-                    <dd className="text-primary">{time}</dd>
-                  </div>
-                )}
-              </dl>
+                {...register("customPlace")}
+              />
+              <FieldError message={errors.customPlace?.message} />
             </motion.div>
           )}
         </AnimatePresence>
+      </section>
 
-        {error && <p className="mt-4 text-center text-sm text-red-400">{error}</p>}
+      {/* --------------------- Date et heure --------------------- */}
+      <section id="quand" className="px-6 py-24 sm:py-32" aria-labelledby="quand-title">
+        <SectionHeading
+          id="quand-title"
+          step="Étape 2"
+          title="Quel jour te conviendrait ?"
+          subtitle="Choisis la date, puis l'horaire qui t'arrange le mieux."
+        />
 
-        <Reveal>
+        <div className="mx-auto grid max-w-5xl items-start gap-8 lg:grid-cols-2">
+          <Reveal>
+            <Calendar value={date} onChange={(iso) => setValue("date", iso, { shouldValidate: true })} />
+            <FieldError message={errors.date?.message} />
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <div className="glass rounded-3xl p-6 sm:p-8">
+              <h3 className="mb-1 flex items-center gap-2 font-display text-xl text-sage-700">
+                <Clock className="h-5 w-5" aria-hidden />
+                Horaire
+              </h3>
+              <p className="mb-6 text-sm text-ink-soft">
+                {date ? <span className="capitalize">{formatDateFr(date)}</span> : "Choisis d'abord une date."}
+              </p>
+
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {TIME_SLOTS.map((t) => (
+                  <motion.button
+                    key={t}
+                    type="button"
+                    onClick={select("time", t)}
+                    aria-pressed={time === t}
+                    whileHover={reduced ? undefined : { scale: 1.06 }}
+                    whileTap={reduced ? undefined : { scale: 0.94 }}
+                    className={cn(
+                      "h-12 rounded-xl border text-sm font-medium transition-colors duration-250",
+                      time === t
+                        ? "border-sage-600 bg-sage-600 text-cream shadow-[0_10px_24px_-12px_rgba(65,79,60,0.9)]"
+                        : "border-sage-200 bg-white/70 text-sage-700 hover:bg-sage-50",
+                    )}
+                  >
+                    {t}
+                  </motion.button>
+                ))}
+              </div>
+              <FieldError message={errors.time?.message} />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ---------------- Message + confirmation ---------------- */}
+      <section id="confirmation" className="px-6 pb-32 pt-16 sm:pb-40" aria-labelledby="confirmation-title">
+        <SectionHeading
+          id="confirmation-title"
+          step="Étape 3"
+          title="As-tu une préférence ?"
+          subtitle="Un mot, une idée, une contrainte d'horaire — tout est le bienvenu. C'est optionnel."
+        />
+
+        <div className="mx-auto max-w-2xl">
+          <Reveal>
+            <label htmlFor="message" className="mb-3 block text-sm font-medium text-sage-700">
+              Ton message (optionnel)
+            </label>
+            <Textarea
+              id="message"
+              rows={4}
+              placeholder="Par exemple : « Plutôt en fin d'après-midi, si possible. »"
+              aria-describedby="message-hint"
+              {...register("message")}
+            />
+            <p id="message-hint" className="mt-2 text-xs text-ink-soft/70">
+              600 caractères maximum.
+            </p>
+            <FieldError message={errors.message?.message} />
+          </Reveal>
+
+          {/* Récapitulatif animé */}
+          <Reveal delay={0.1}>
+            <div className="mt-10 rounded-3xl border border-gold/25 bg-white/55 p-6 backdrop-blur-md">
+              <h3 className="mb-4 font-display text-lg text-sage-700">Récapitulatif</h3>
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <SummaryItem
+                  label="Lieu"
+                  value={
+                    place === "son-choix"
+                      ? watch("customPlace")?.trim() || "Un restaurant de ton choix"
+                      : PLACES.find((p) => p.id === place)?.name
+                  }
+                />
+                <SummaryItem label="Date" value={date ? formatDateFr(date) : undefined} />
+                <SummaryItem label="Heure" value={time || undefined} />
+              </dl>
+            </div>
+          </Reveal>
+
           <div className="mt-12 text-center">
-            <FancyButton type="submit" size="xl" variant="accent" disabled={isPending}>
-              {isPending ? "Envoi…" : "Confirmer"}
-              <Send className="h-5 w-5" aria-hidden />
+            <FancyButton type="submit" size="xl" variant="gold" disabled={pending} className="w-full sm:w-auto">
+              {pending ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  Envoi…
+                </>
+              ) : (
+                <>Confirmer</>
+              )}
             </FancyButton>
+
+            <div className="mt-5 min-h-6" aria-live="assertive">
+              <AnimatePresence>
+                {serverError && (
+                  <motion.p
+                    className="text-sm text-sage-700"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    {serverError}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
-        </Reveal>
+        </div>
       </section>
     </form>
+  );
+}
+
+/** Message d'erreur de champ, annoncé aux lecteurs d'écran. */
+function FieldError({ message }: { message?: string }) {
+  return (
+    <div className="mt-4 text-center" aria-live="polite">
+      <AnimatePresence>
+        {message && (
+          <motion.p
+            className="text-sm font-medium text-sage-700"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            {message}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/** Ligne du récapitulatif. */
+function SummaryItem({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <dt className="text-[11px] tracking-[0.2em] text-ink-soft/60 uppercase">{label}</dt>
+      <dd className="font-display text-base text-sage-700">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={value ?? "vide"}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.3 }}
+            className="inline-block"
+          >
+            {value ?? "—"}
+          </motion.span>
+        </AnimatePresence>
+      </dd>
+    </div>
   );
 }

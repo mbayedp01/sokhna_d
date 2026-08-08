@@ -1,4 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#05070D"/>
-  <text x="50" y="68" font-size="56" text-anchor="middle" fill="#DCE7FF">✦</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#faf8f3"/>
+  <g transform="translate(32 32)">
+    <g fill="#e8dcc6" stroke="#d9c08a" stroke-width="1">
+      <ellipse rx="7" ry="15" cy="-9"/>
+      <ellipse rx="7" ry="15" cy="-9" transform="rotate(72)"/>
+      <ellipse rx="7" ry="15" cy="-9" transform="rotate(144)"/>
+      <ellipse rx="7" ry="15" cy="-9" transform="rotate(216)"/>
+      <ellipse rx="7" ry="15" cy="-9" transform="rotate(288)"/>
+    </g>
+    <circle r="6" fill="#b99a5c"/>
+  </g>
 </svg>
